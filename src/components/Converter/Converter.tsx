@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import currenciesData from "../../data/currencies.json";
 import { useDebounce } from "../../hooks/useDebounce";
 import { fetchRates, isCacheStale, readCachedRates, saveRatesToCache } from "../../services/rates";
-import { formatNumber, parseAmountInput } from "../../utils/format";
+import type { CurrencyMeta } from "../../types";
+import { formatCurrency, parseAmountInput } from "../../utils/format";
 import CurrencySelectorModal from "../CurrencySelectorModal/CurrencySelectorModal";
 import styles from "./Converter.module.scss";
-
 const LOCAL_KEY = "cc_state_v1";
 
 type AppState = {
@@ -16,6 +17,8 @@ type AppState = {
 const DEFAULTS: AppState = { from: "EUR", to: "USD", amount: "1" };
 
 export default function Converter() {
+    const currencies: CurrencyMeta[] = currenciesData as CurrencyMeta[];
+
     const [state, setState] = useState<AppState>(() => {
         try {
             const raw = localStorage.getItem(LOCAL_KEY);
@@ -36,7 +39,6 @@ export default function Converter() {
     const [showToModal, setShowToModal] = useState(false);
     const [manualRefreshLock, setManualRefreshLock] = useState(false);
 
-    // network online/offline
     const [online, setOnline] = useState<boolean>(navigator.onLine);
     useEffect(() => {
         const on = () => setOnline(true);
@@ -53,7 +55,6 @@ export default function Converter() {
         localStorage.setItem(LOCAL_KEY, JSON.stringify(state));
     }, [state]);
 
-    // load rates (with cache + stale check)
     const loadRates = useCallback(async (force = false) => {
         setError(null);
         setLoading(true);
@@ -71,13 +72,9 @@ export default function Converter() {
 
             const resp = await fetchRates();
             saveRatesToCache(resp);
-            setRatesResp({
-                base: resp.base || "EUR",
-                rates: resp.rates,
-                timestamp: Date.now(),
-            });
+            setRatesResp({ base: resp.base || "EUR", rates: resp.rates, timestamp: Date.now() });
             setLoading(false);
-        } catch (e) {
+        } catch (err: any) {
             const cached = readCachedRates();
             if (cached) {
                 setRatesResp({
@@ -96,22 +93,31 @@ export default function Converter() {
 
     useEffect(() => {
         loadRates(false);
-    }, []);
+    }, [loadRates]);
 
     const debouncedAmount = useDebounce(state.amount, 250);
 
-    const availableCurrencies = useMemo(() => {
-        return ratesResp ? Object.keys(ratesResp.rates).sort() : ["EUR", "USD"];
-    }, [ratesResp]);
+    const currenciesMap = useMemo(() => {
+        const m = new Map<string, CurrencyMeta>();
+        for (const c of currencies) m.set(c.code, c);
+        return m;
+    }, [currencies]);
 
-    const namesMap = useMemo(() => {
-        return {} as Record<string, string>;
-    }, []);
+    const availableCurrencies = useMemo(() => {
+        if (!ratesResp) {
+            // fallback to currencies.json codes
+            return currencies.map((c) => c.code);
+        }
+        // intersection: rates keys ∪ currencies.json
+        const set = new Set<string>(Object.keys(ratesResp.rates));
+        for (const c of currencies) set.add(c.code);
+        return Array.from(set).sort();
+    }, [ratesResp, currencies]);
 
     const computeRate = useCallback(
         (from: string, to: string) => {
             if (!ratesResp) return null;
-            const { rates, base } = ratesResp;
+            const { rates } = ratesResp;
             const rBaseToA = rates[from];
             const rBaseToB = rates[to];
             if (rBaseToA === undefined || rBaseToB === undefined) return null;
@@ -127,8 +133,12 @@ export default function Converter() {
         const rate = computeRate(state.from, state.to);
         if (rate === null) return { ok: false, msg: "Unknown currency code" };
         const value = amt * rate;
-        return { ok: true, rate, value };
-    }, [debouncedAmount, state.from, state.to, ratesResp, computeRate]);
+
+        const toMeta = currenciesMap.get(state.to);
+        const digits = toMeta?.decimalDigits ?? 4;
+        const formatted = formatCurrency(value, toMeta?.symbolNative ?? toMeta?.symbol, digits);
+        return { ok: true, rate, value, formatted, digits };
+    }, [debouncedAmount, state.from, state.to, ratesResp, computeRate, currenciesMap]);
 
     const onSwap = () => {
         setState((s) => ({ ...s, from: s.to, to: s.from }));
@@ -141,14 +151,18 @@ export default function Converter() {
         setTimeout(() => setManualRefreshLock(false), 1000);
     };
 
+    const selectedFromMeta = currenciesMap.get(state.from);
+    const selectedToMeta = currenciesMap.get(state.to);
+
     return (
         <div className={styles.container}>
             <div className={styles.header}>
                 <h1>Currency Converter</h1>
                 <div className={styles.network}>
-                    {online ? "Online" : "Offline"}{" "}
+                    {online ? "Online" : "Offline"}
                     {!online && ratesResp && (
                         <span>
+                            {" "}
                             · Using cached rates from{" "}
                             {ratesResp.timestamp
                                 ? new Date(ratesResp.timestamp).toLocaleString()
@@ -168,7 +182,14 @@ export default function Converter() {
                         inputMode="decimal"
                     />
                     <button className={styles.currencyBtn} onClick={() => setShowFromModal(true)}>
-                        {state.from}
+                        {selectedFromMeta?.flagSrc && (
+                            <img
+                                src={selectedFromMeta.flagSrc}
+                                alt={state.from}
+                                className={styles.flagSmall}
+                            />
+                        )}
+                        <span style={{ marginLeft: 8 }}>{state.from}</span>
                     </button>
                 </div>
 
@@ -177,9 +198,15 @@ export default function Converter() {
                 </button>
 
                 <div className={styles.input}>
-                    <input readOnly value="" style={{ display: "none" }} />
                     <button className={styles.currencyBtn} onClick={() => setShowToModal(true)}>
-                        {state.to}
+                        {selectedToMeta?.flagSrc && (
+                            <img
+                                src={selectedToMeta.flagSrc}
+                                alt={state.to}
+                                className={styles.flagSmall}
+                            />
+                        )}
+                        <span style={{ marginLeft: 8 }}>{state.to}</span>
                     </button>
                 </div>
 
@@ -203,17 +230,23 @@ export default function Converter() {
                     <>
                         <div>
                             <strong>
-                                {formatNumber(Number.parseFloat(debouncedAmount || "0") || 0)}
+                                {formatCurrency(
+                                    Number(parseFloat(debouncedAmount || "0") || 0),
+                                    selectedFromMeta?.symbolNative ?? selectedFromMeta?.symbol,
+                                    selectedFromMeta?.decimalDigits ?? 2
+                                )}
                             </strong>{" "}
                             {state.from}
                         </div>
+
                         <div style={{ marginTop: 8 }}>
-                            <strong>{formatNumber(conversion.value || 0)}</strong> {state.to}
+                            <strong>{conversion.formatted}</strong> {state.to}
                         </div>
+
                         <div className={styles.small} style={{ marginTop: 8 }}>
-                            Rate: 1 {state.from} = {formatNumber(conversion.rate || 0, 6)}{" "}
-                            {state.to}
+                            Rate: 1 {state.from} = {conversion.rate.toFixed(6)} {state.to}
                         </div>
+
                         {ratesResp?.timestamp && (
                             <div className={styles.small}>
                                 Rates base: {ratesResp.base} · fetched:{" "}
@@ -227,20 +260,19 @@ export default function Converter() {
             <CurrencySelectorModal
                 visible={showFromModal}
                 onClose={() => setShowFromModal(false)}
-                currencies={availableCurrencies}
+                items={currencies.filter((c) => availableCurrencies.includes(c.code))}
                 selected={state.from}
-                namesMap={namesMap}
                 onSelect={(c) => {
                     setState((s) => ({ ...s, from: c }));
                     setShowFromModal(false);
                 }}
             />
+
             <CurrencySelectorModal
                 visible={showToModal}
                 onClose={() => setShowToModal(false)}
-                currencies={availableCurrencies}
+                items={currencies.filter((c) => availableCurrencies.includes(c.code))}
                 selected={state.to}
-                namesMap={namesMap}
                 onSelect={(c) => {
                     setState((s) => ({ ...s, to: c }));
                     setShowToModal(false);

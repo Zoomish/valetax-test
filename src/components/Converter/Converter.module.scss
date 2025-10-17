@@ -69,6 +69,13 @@
     border-radius: 50%;
     animation: spin 1s linear infinite;
 }
+.flagSmall {
+  width: 20px;
+  height: 14px;
+  object-fit: cover;
+  border-radius: 2px;
+}
+
 @keyframes spin {
     to {
         transform: rotate(360deg);
