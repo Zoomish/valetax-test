@@ -1,0 +1,85 @@
+.container {
+    max-width: 920px;
+    margin: 24px auto;
+    padding: 16px;
+}
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+.controls {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.input {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+.input input {
+    padding: 8px 10px;
+    width: 160px;
+    border-radius: 6px;
+    border: 1px solid #ddd;
+}
+.currencyBtn {
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid #ddd;
+    background: white;
+    cursor: pointer;
+}
+.swap {
+    padding: 8px;
+    border: none;
+    background: #f0f0f0;
+    border-radius: 6px;
+    cursor: pointer;
+}
+.result {
+    margin-top: 16px;
+    padding: 12px;
+    border-radius: 8px;
+    background: #fafafa;
+    border: 1px solid #eee;
+}
+.network {
+    font-size: 0.9rem;
+    color: #666;
+}
+.small {
+    font-size: 0.9rem;
+    color: #666;
+}
+.actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+.spinner {
+    display: inline-block;
+    width: 18px;
+    height: 18px;
+    border: 3px solid #ddd;
+    border-top-color: #666;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@media (max-width: 480px) {
+    .controls {
+        flex-direction: column;
+    }
+    .input input {
+        width: 100%;
+    }
+}

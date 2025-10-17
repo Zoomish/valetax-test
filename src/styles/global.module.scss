@@ -1,0 +1,29 @@
+:root {
+    --bg: #fff;
+    --text: #222;
+}
+* {
+    box-sizing: border-box;
+}
+html,
+body,
+#root {
+    height: 100%;
+    margin: 0;
+    font-family:
+        Inter,
+        system-ui,
+        -apple-system,
+        "Segoe UI",
+        Roboto,
+        "Helvetica Neue",
+        Arial;
+    background: var(--bg);
+    color: var(--text);
+}
+a {
+    color: inherit;
+}
+button {
+    font: inherit;
+}
